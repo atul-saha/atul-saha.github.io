@@ -1,0 +1,459 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sepsis Systems Map - Professional Framework Analysis</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lexend:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f172a;
+            --accent-red: #dc2626;
+            --clinical: #2563eb;
+            --equity: #7c3aed;
+            --economic: #059669;
+            --system: #d97706;
+            --bg: #fdfdfd;
+            --panel-bg: rgba(255, 255, 255, 0.99);
+            --border: #e2e8f0;
+        }
+
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            overflow: hidden;
+            color: var(--primary);
+        }
+
+
+        #header {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: 450px;
+        }
+
+
+        h1 {
+            font-family: 'Lexend', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            margin: 0;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+        }
+
+
+        .subtitle {
+            font-size: 13px;
+            line-height: 1.4;
+            color: #64748b;
+            margin-top: 6px;
+        }
+
+
+        #viz-container {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+
+
+        #viz-container:active { cursor: grabbing; }
+
+
+        #side-panel {
+            position: absolute;
+            right: 24px;
+            top: 24px;
+            bottom: 24px;
+            width: 580px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(620px);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+        }
+
+
+        #side-panel.visible { transform: translateX(0); }
+
+
+        .category-pill {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 30px;
+            color: white;
+        }
+
+
+        #detail-title {
+            font-family: 'Lexend', sans-serif;
+            font-size: 22px;
+            margin-bottom: 18px;
+            line-height: 1.1;
+            color: var(--primary);
+        }
+
+
+        #detail-content {
+            font-size: 14px;
+            line-height: 1.75;
+            color: #334155;
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 15px;
+        }
+
+
+        #detail-content h4 {
+            margin: 24px 0 10px 0;
+            font-size: 15px;
+            color: var(--primary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+
+        .intersection-block {
+            background: #f1f5f9;
+            border-left: 6px solid var(--accent-red);
+            padding: 24px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+
+        .intersection-nodes {
+            font-weight: 800;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+
+        .intersection-nodes .sep { color: var(--accent-red); font-size: 14px; }
+
+
+        .analysis-box {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 13.5px;
+        }
+        .help-box { background: #ecfdf5; border-left: 4px solid #10b981; }
+        .hinder-box { background: #fef2f2; border-left: 4px solid #ef4444; }
+
+
+        .source-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 11px;
+            color: #475569;
+            margin-top: 20px;
+            font-style: italic;
+        }
+
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #f1f5f9;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+        }
+
+
+        .node circle { stroke: #fff; stroke-width: 2.5px; transition: stroke 0.2s, r 0.2s, filter 0.2s; }
+        .node.selected circle { stroke: var(--primary); stroke-width: 4px; filter: drop-shadow(0 0 8px rgba(0,0,0,0.2)); }
+        .link { stroke: #cbd5e1; stroke-opacity: 0.3; stroke-width: 1.5px; fill: none; transition: stroke-opacity 0.3s, stroke 0.3s, stroke-width 0.3s; }
+        .link.active { stroke: var(--accent-red); stroke-opacity: 0.8; stroke-width: 3px; }
+        .node text { font-size: 10px; font-weight: 500; pointer-events: none; text-anchor: middle; fill: #475569; }
+
+
+        .legend {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: white;
+            padding: 18px;
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            font-size: 10px;
+            border: 1px solid var(--border);
+        }
+        .legend-title { font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .dot { width: 10px; height: 10px; border-radius: 3px; }
+
+
+        .instruction-toast {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 500;
+            pointer-events: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+
+
+    <div id="header">
+        <h1>Economic & Policy Framework Analysis</h1>
+        <div class="subtitle">Aiden Moore Case EQIPS. Analyze how <strong>Policy/Economic frameworks</strong> both helped and hindered care.</div>
+    </div>
+
+
+    <div id="viz-container"></div>
+
+
+    <div id="side-panel">
+        <button class="close-btn" onclick="clearSelection()">&times;</button>
+        <div id="category-pill" class="category-pill">Category</div>
+        <h2 id="detail-title">System Node</h2>
+        <div id="detail-content">Select nodes for granular systems data.</div>
+        <div id="source-box" class="source-box">Select a node to see clinical citations.</div>
+    </div>
+
+
+    <div class="legend">
+        <div class="legend-title">Domain Taxonomy</div>
+        <div class="legend-item"><div class="dot" style="background: var(--accent-red);"></div> Mortality / Case Apex</div>
+        <div class="legend-item"><div class="dot" style="background: var(--clinical);"></div> Clinical & Physiology</div>
+        <div class="legend-item"><div class="dot" style="background: var(--system);"></div> Operational & IT Logic</div>
+        <div class="legend-item"><div class="dot" style="background: var(--economic);"></div> Economic & Policy Framework</div>
+        <div class="legend-item"><div class="dot" style="background: var(--equity);"></div> Equity & Social Factors</div>
+    </div>
+
+
+    <div class="instruction-toast">EQIPS Analytical View: Select two connected nodes to trace systemic root causes.</div>
+
+
+    <script>
+        const data = {
+            nodes: [
+                // CORE APEX
+                { id: "Aiden Moore (Death)", group: "core", category: "PATIENT OUTCOME", val: 35, desc: `<h4>Mortality Summary</h4><p>Preventable death secondary to septic shock. Despite high healthcare literacy and employer-sponsored insurance, the institutional "Safety Buffer" was insufficient to overcome process fragmentation during a surge.</p>`, source: "Institutional Mortality Review, 2026." },
+                
+                // CLINICAL
+                { id: "Sepsis-3 SOFA Score", group: "clinical", category: "PHYSIOLOGY", val: 20, desc: `<h4>SOFA Score Calculation</h4><p>A score increase of ≥2 points correlates with an in-hospital mortality rate of >10%. In Moore's case, the failure of the policy framework to mandate automated SOFA alerts on arrival allowed his 'scared' appearance to override biological risk.</p>`, source: "Singer, M., et al. (2016). JAMA." },
+                { id: "Initial PCP Radiograph", group: "clinical", category: "DIAGNOSTIC DELAY", val: 18, desc: `<h4>Initial Assessment</h4><p>Three days prior to admission, a normal 3-view radiograph led to an orthopedic referral rather than urgent intervention. This represents a critical diagnostic anchor point.</p>`, source: "Ross, J. J. (2017). NEJM." },
+                { id: "Septic Arthritis (Source)", group: "clinical", category: "DIAGNOSIS", val: 20, desc: `<h4>Source Control Failure</h4><p>Early identification of the septic knee was hindered by a 'Normal' radiograph. This established a cognitive wellness trajectory that anchored subsequent diagnostic efforts and delayed source control.</p>`, source: "NEJM: Septic Arthritis." },
+                { id: "Lactate 4.2", group: "clinical", category: "LABORATORY", val: 22, desc: `<h4>Biochemical Evidence</h4><p>Moore's lactate indicated severe metabolic distress. The policy framework (SEP-1) mandates this measurement, yet stewardship fails when results are not reviewed in a 'closed-loop' cycle.</p>`, source: "SSC Guidelines, 2021." },
+
+
+                // SYSTEMS
+                { id: "Lab Review Latency", group: "system", category: "OPERATIONS", val: 22, desc: `<h4>Information Silo</h4><p>Results drawn hours ago were reviewed only after collapse. This represents a failure of informatics stewardship—investing in tests without investing in the systems to act on them.</p>`, source: "Case Study Text." },
+                { id: "Duplicate Order Flag", group: "system", category: "IT LOGIC", val: 24, desc: `<h4>Efficiency Bottleneck</h4><p>IT logic designed to reduce drug waste (Economic Stewardship) ironically delayed the life-saving dose. The EHR 'Hard Stop' added 45 minutes of verification delay.</p>`, source: "Case Study Text." },
+                { id: "Pharmacy Delivery Delay", group: "system", category: "OPERATIONS", val: 22, desc: `<h4>Logistical Gap</h4><p>The 3-hour delay was the physical manifestation of miscommunication between EM and Orthopedics. The system lacked a 'Sepsis Lead' to bypass logistical noise.</p>`, source: "Case Study Text." },
+                { id: "Shift-Change Noise", group: "system", category: "OPERATIONS", val: 20, desc: `<h4>Handoff Decay</h4><p>Information loss during the nursing transition. Policy mandates handoffs, but environmental surge (Trauma) often degrades the quality of these critical safety checks.</p>`, source: "Starmer, A. J. (2014). NEJM." },
+                { id: "Concurrent Trauma Surge", group: "system", category: "SYSTEM CAPACITY", val: 22, desc: `<h4>Resource Scarcity</h4><p>Economic constraints often leave EDs under-staffed for 'Double Surge' scenarios. The trauma event competed directly with Moore's need for senior clinical focus.</p>`, source: "Case Study Text." },
+
+
+                // ECONOMIC & POLICY
+                { id: "CMS FY2026 VBP", group: "economic", category: "REGULATORY", val: 26, desc: `<h4>Economic Catalyst</h4><p><strong>Help:</strong> Links 2026 reimbursement to SEP-1 compliance, forcing hospitals to invest in better handoffs and automated alerts.</p><p><strong>Hinder:</strong> Can lead to 'Check-Box' medicine, where clinicians prioritize bundle metrics over nuanced patient assessment.</p>`, source: "CMS FY 2024 Final Rule." },
+                { id: "Economic Stewardship", group: "economic", category: "VALUE", val: 22, desc: `<h4>Value Calculus</h4><p><strong>Help:</strong> Encourages early, low-cost interventions (antibiotics) to prevent \$50,000 terminal stays.</p><p><strong>Hinder:</strong> Over-emphasis on efficiency leads to automated EHR 'Hard Stops' (like Duplicate Order flags) that prioritize cost-savings over speed.</p>`, source: "Buchman, T. G., et al. (2020)." },
+                { id: "Batelle Bundle Maintenance", group: "economic", category: "POLICY", val: 18, desc: `<h4>Regulatory Friction</h4><p>The move from NQF to Batelle reflects a shift toward technical metric maintenance. Critics worry this decouples policy from the messy clinical reality of 'surge' environments.</p>`, source: "Case Study Text." },
+                { id: "Professional Opposition", group: "economic", category: "POLICY", val: 22, desc: `<h4>Clinician Resistance</h4><p>Organizations like IDSA/ACEP oppose rigid bundle implementation, arguing it distracts from complex diagnostic workups. Moore's vague symptoms are exactly where 'Standardized' bundles face friction.</p>`, source: "Rhee, C., et al. (2019). JAMA." },
+
+
+                // EQUITY & SOCIAL
+                { id: "Healthy Person Bias", group: "equity", category: "BIAS", val: 18, desc: `<h4>Cognitive Anchor</h4><p>Anchoring on Moore's gym-goer status blinded the team to septic encephalopathy. A policy lack of 'Bias-Aware' triage tools allowed this anchoring to persist until death.</p>`, source: "EQIPS Cognitive Analysis." },
+                { id: "Mixed Race / Latine Identity", group: "equity", category: "EQUITY", val: 18, desc: `<h4>Equity Frame</h4><p>Policy frameworks (VBP) now include 'Health Equity Adjustors.' Moore's case is a data point in how identity-driven triage variability impacts bundle timing.</p>`, source: "Howell, S., et al. (2021)." },
+                { id: "Husband Caregiver Advocacy", group: "equity", category: "SOCIAL", val: 20, desc: `<h4>Social Integration</h4><p>The system failed to integrate the husband's 1-week history into the clinical hierarchy early enough. Stewardship should involve family-integrated care models.</p>`, source: "Case Study Text." },
+                { id: "Resource Access (Insurance)", group: "equity", category: "EQUITY", val: 18, desc: `<h4>Access Paradox</h4><p>Despite employer-sponsored insurance and high health literacy, the system's process failures were not mitigated by socioeconomic status.</p>`, source: "Healthcare Equity Analysis." }
+            ],
+            links: [
+                { source: "Aiden Moore (Death)", target: "Sepsis-3 SOFA Score" },
+                { source: "Sepsis-3 SOFA Score", target: "Lactate 4.2" },
+                { source: "Lactate 4.2", target: "Lab Review Latency" },
+                { source: "Lab Review Latency", target: "Aiden Moore (Death)" },
+                { source: "Septic Arthritis (Source)", target: "Aiden Moore (Death)" },
+                { source: "Duplicate Order Flag", target: "Pharmacy Delivery Delay" },
+                { source: "Pharmacy Delivery Delay", target: "Shift-Change Noise" },
+                { source: "Shift-Change Noise", target: "Aiden Moore (Death)" },
+                { source: "Concurrent Trauma Surge", target: "Shift-Change Noise" },
+                { source: "CMS FY2026 VBP", target: "Aiden Moore (Death)" },
+                { source: "CMS FY2026 VBP", target: "Economic Stewardship" },
+                { source: "CMS FY2026 VBP", target: "Batelle Bundle Maintenance" },
+                { source: "Professional Opposition", target: "CMS FY2026 VBP" },
+                { source: "Economic Stewardship", target: "Duplicate Order Flag" },
+                { source: "Healthy Person Bias", target: "Aiden Moore (Death)" },
+                { source: "Husband Caregiver Advocacy", target: "Septic Arthritis (Source)" },
+                { source: "Sepsis-3 SOFA Score", target: "Professional Opposition" },
+                { source: "Initial PCP Radiograph", target: "Septic Arthritis (Source)" },
+                { source: "Mixed Race / Latine Identity", target: "Healthy Person Bias" },
+                { source: "Resource Access (Insurance)", target: "Initial PCP Radiograph" },
+                { source: "Concurrent Trauma Surge", target: "Aiden Moore (Death)" }
+            ],
+            interactions: {
+                "Aiden Moore (Death)+Sepsis-3 SOFA Score": "<h4>Synthesis: Physiological Failure to Rescue</h4><p>The failure to act on the SOFA score of ≥4 (identifying a 10% mortality risk) immediately upon arrival. The policy framework failed to mandate an automated, 'hard-alert' response to these criteria.</p>",
+                "Sepsis-3 SOFA Score+Lactate 4.2": "<h4>Synthesis: Confirmatory Neglect</h4><p>Both markers indicated severe shock. In a high-value system, this pairing should have bypassed the ED-Ortho miscommunication entirely by triggering a hospital-wide 'Sepsis Code'.</p>",
+                "Lactate 4.2+Lab Review Latency": "<h4>Synthesis: Informatics Blindspot</h4><p>The biochemical proof of shock existed in the system but was not 'pushed' to the clinicians. This reveals a failure in clinical informatics stewardship—data existed without utility.</p>",
+                "Lab Review Latency+Aiden Moore (Death)": "<h4>Synthesis: Terminal Information Lag</h4><p>By the time results were reviewed (3 hours late), the window for early goal-directed therapy had closed. Information latency converted a potentially survivable infection into a terminal arrest.</p>",
+                "Septic Arthritis (Source)+Aiden Moore (Death)": "<h4>Synthesis: Source Control Delay</h4><p>Sepsis management requires antimicrobial therapy AND source control. The delay in recognizing the knee as the 'engine' of sepsis prevented the early surgical intervention (Lavage) required for survival.</p>",
+                "Duplicate Order Flag+Pharmacy Delivery Delay": "<h4>Framework Impact: Efficiency vs. Safety</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> Software logic intended to prevent medication errors (duplicate orders) created a manual verification bottleneck, resulting in a fatal delivery delay.</div>",
+                "Pharmacy Delivery Delay+Shift-Change Noise": "<h4>Synthesis: Supply Chain Collapse</h4><p>The antibiotic arrived during the most vulnerable period of hospital operations—nursing handoff. Without a 'Safety Buffer' of dedicated sepsis responders, the medication sat idle while the patient's vitals collapsed.</p>",
+                "Shift-Change Noise+Aiden Moore (Death)": "<h4>Framework Impact: Stewardship of Staffing</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> Economic pressure on nursing ratios leaves zero margin for error during handoff. When 'Shift Change' meets 'Surge', task saturation leads to lethal information decay.</div>",
+                "Concurrent Trauma Surge+Shift-Change Noise": "<h4>Synthesis: Environmental Surge Decay</h4><p>The multiple trauma event created 'Environmental Noise' that degraded the quality of the sepsis handoff. Senior staff were physically diverted to trauma, leaving Moore in a monitoring vacuum.</p>",
+                "CMS FY2026 VBP+Aiden Moore (Death)": "<h4>Framework Impact: Regulatory Accountability</h4><div class='analysis-box help-box'><strong>Help:</strong> In 2026, the potential for a 3% VBP penalty would have driven the hospital to implement automated sepsis triggers to protect reimbursement.</div><div class='analysis-box hinder-box'><strong>Hinder:</strong> The focus on 'Check-Box' bundle compliance might have led clinicians to treat the lactate value but still miss the septic joint source.</div>",
+                "CMS FY2026 VBP+Economic Stewardship": "<h4>Framework Impact: Value Alignment</h4><div class='analysis-box help-box'><strong>Help:</strong> VBP aligns institutional profit with survival by punishing 'expensive failures' like late-stage septic arrest.</div>",
+                "CMS FY2026 VBP+Batelle Bundle Maintenance": "<h4>Framework Impact: Policy Governance</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> Critics argue that outsourcing bundle maintenance to technical contractors like Batelle removes the 'Clinical Soul' from metrics, making them less responsive to messy bedside realities like shift change or trauma surges.</div>",
+                "Professional Opposition+CMS FY2026 VBP": "<h4>Framework Impact: Clinical Autonomy</h4><div class='analysis-box help-box'><strong>Help:</strong> Opposition from IDSA/ACEP ensures that policy doesn't force clinicians into 'Diagnostic Anchoring' (calling everything sepsis).</div><div class='analysis-box hinder-box'><strong>Hinder:</strong> Resistance to 'Mandatory' bundles might have contributed to the lack of a standardized, urgent response to Moore's vague symptoms.</div>",
+                "Economic Stewardship+Duplicate Order Flag": "<h4>Framework Impact: The Waste Conflict</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> 'Economic Stewardship' flags duplicate orders to save \$100 in drug waste, but in this case, it caused a process delay that led to a life-lost and a \$100,000 terminal hospital bill.</div>",
+                "Healthy Person Bias+Aiden Moore (Death)": "<h4>Synthesis: Cognitive Drift</h4><p>The team anchored on the 'Software Engineer/Gym' profile. This 'Healthy Person Bias' acted as a safety valve, making clinicians feel comfortable with the 3-hour delay until physiological collapse was visible.</p>",
+                "Husband Caregiver Advocacy+Septic Arthritis (Source)": "<h4>Synthesis: Integrated History Failure</h4><p>The system failed to weigh the husband's report of a 1-week history early enough. High-value care requires integrating family data into the diagnostic hierarchy with the same weight as lab values.</p>",
+                "Initial PCP Radiograph+Septic Arthritis (Source)": "<h4>Synthesis: The First Domino</h4><p>A normal radiograph in early septic arthritis is common but deceptive. This 'False Negative' founded the cognitive error that Moore's pain was non-infectious.</p>",
+                "Sepsis-3 SOFA Score+Professional Opposition": "<h4>Framework Impact: Consensus Conflict</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> Disagreement over Sepsis definitions (Sepsis-2 vs Sepsis-3) in professional circles creates ambiguity in hospital protocols, leading to the kind of hesitation seen in Moore's care.</div>",
+                "Mixed Race / Latine Identity+Healthy Person Bias": "<h4>Framework Impact: Equity Bias Interaction</h4><div class='analysis-box hinder-box'><strong>Hinder:</strong> Intersectionality of identity and 'Healthy Appearance' can lead to subtle under-triage. The policy framework (VBP) now targets this via Equity Adjustors, but bedside implementation lags.</div>",
+                "Resource Access (Insurance)+Initial PCP Radiograph": "<h4>Synthesis: The Access Paradox</h4><p>Moore followed the 'rules' (PCP visit, X-ray). His high-resource status made clinicians assume he was low-risk, as 'high-risk' patients are often stereotyped as having less primary care engagement.</p>",
+                "Concurrent Trauma Surge+Aiden Moore (Death)": "<h4>Synthesis: Clinical Crowd-out</h4><p>In a resource-strained environment, 'quiet' medical emergencies like sepsis are crowded out by 'loud' surgical ones like trauma. The system lacked the resilience to handle both.</p>"
+            }
+        };
+
+
+        const selectedNodes = new Set();
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+
+        const colorMap = { core: "var(--accent-red)", clinical: "var(--clinical)", system: "var(--system)", economic: "var(--economic)", equity: "var(--equity)" };
+
+
+        const svg = d3.select("#viz-container").append("svg").attr("width", width).attr("height", height).call(d3.zoom().scaleExtent([0.4, 3]).on("zoom", (event) => container.attr("transform", event.transform)));
+        const container = svg.append("g");
+        const simulation = d3.forceSimulation(data.nodes).force("link", d3.forceLink(data.links).id(d => d.id).distance(260)).force("charge", d3.forceManyBody().strength(-2000)).force("center", d3.forceCenter(width / 2.9, height / 2)).force("collision", d3.forceCollide().radius(d => d.val + 35));
+
+
+        const link = container.append("g").selectAll("line").data(data.links).enter().append("line").attr("class", "link");
+        const node = container.append("g").selectAll(".node").data(data.nodes).enter().append("g").attr("class", "node").on("click", (event, d) => toggleNode(d)).call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended));
+
+
+        node.append("circle").attr("r", d => d.val).attr("fill", d => colorMap[d.group]).attr("filter", "drop-shadow(0 4px 10px rgba(0,0,0,0.15))");
+        node.append("text").attr("dy", d => d.val + 18).text(d => d.id);
+
+
+        simulation.on("tick", () => {
+            link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+
+
+        function toggleNode(d) {
+            if (selectedNodes.has(d.id)) { selectedNodes.delete(d.id); } else { if (selectedNodes.size >= 2) selectedNodes.clear(); selectedNodes.add(d.id); }
+            updateUI();
+        }
+
+
+        function updateUI() {
+            const panel = document.getElementById('side-panel');
+            const title = document.getElementById('detail-title');
+            const content = document.getElementById('detail-content');
+            const pill = document.getElementById('category-pill');
+            const source = document.getElementById('source-box');
+
+
+            node.classed("selected", n => selectedNodes.has(n.id));
+
+
+            if (selectedNodes.size === 0) {
+                panel.classList.remove('visible');
+                node.selectAll("circle").transition().duration(400).attr("opacity", 1);
+                link.classed("active", false).transition().duration(400).attr("opacity", 0.3);
+                return;
+            }
+
+
+            panel.classList.add('visible');
+            const selectedArray = Array.from(selectedNodes);
+
+
+            if (selectedNodes.size === 1) {
+                const d = data.nodes.find(n => n.id === selectedArray[0]);
+                title.innerText = d.id;
+                content.innerHTML = d.desc;
+                pill.innerText = d.category;
+                pill.style.backgroundColor = colorMap[d.group];
+                source.innerText = d.source || "System Data Reference";
+                link.classed("active", l => l.source.id === d.id || l.target.id === d.id);
+                node.selectAll("circle").transition().duration(400).attr("opacity", n => (n.id === d.id || isConnected(n.id, d.id)) ? 1 : 0.08);
+            } else {
+                const comboKey1 = `${selectedArray[0]}+${selectedArray[1]}`;
+                const comboKey2 = `${selectedArray[1]}+${selectedArray[0]}`;
+                const intersection = data.interactions[comboKey1] || data.interactions[comboKey2];
+
+
+                pill.innerText = "Framework Interaction Analysis";
+                pill.style.backgroundColor = "var(--primary)";
+                title.innerHTML = `Synthesis: ${selectedArray[0]} & ${selectedArray[1]}`;
+                
+                if (intersection) {
+                    content.innerHTML = `<div class="intersection-block"><div class="intersection-nodes"><span>${selectedArray[0]}</span> <span class="sep">/</span> <span>${selectedArray[1]}</span></div>${intersection}</div>`;
+                } else {
+                    content.innerHTML = `<p>Tracing how these factors co-produced the clinical environment. While not directly linked by a single software flag, they represent the conflict between institutional <strong>Economic Stewardship</strong> and bedside <strong>Safety Resilience</strong>.</p>`;
+                }
+                source.innerText = "Source: EQIPS Systems Synthesis & Policy Analysis.";
+                link.classed("active", l => (selectedNodes.has(l.source.id) && selectedNodes.has(l.target.id)) || (selectedNodes.has(l.source.id) || selectedNodes.has(l.target.id)));
+                node.selectAll("circle").transition().duration(400).attr("opacity", n => selectedNodes.has(n.id) ? 1 : 0.05);
+            }
+        }
+
+
+        function isConnected(id1, id2) {
+            return data.links.some(l => (l.source.id === id1 && l.target.id === id2) || (l.source.id === id2 && l.target.id === id1));
+        }
+
+
+        function clearSelection() { selectedNodes.clear(); updateUI(); }
+        function dragstarted(event) { if (!event.active) simulation.alphaTarget(0.3).restart(); event.subject.fx = event.subject.x; event.subject.fy = event.subject.y; }
+        function dragged(event) { event.subject.fx = event.x; event.subject.fy = event.y; }
+        function dragended(event) { if (!event.active) simulation.alphaTarget(0); event.subject.fx = null; event.subject.fy = null; }
+
+
+        window.addEventListener('resize', () => { svg.attr("width", window.innerWidth).attr("height", window.innerHeight); simulation.force("center", d3.forceCenter(width / 2.9, height / 2)); simulation.alpha(0.3).restart(); });
+    </script>
+</body>
+</html>
